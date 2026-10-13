@@ -5,15 +5,16 @@
 [![Jenkins Plugin](https://img.shields.io/badge/Jenkins-2.528.3+-blue.svg)](https://www.jenkins.io/)
 
 A Jenkins plugin that adds a reusable **Run AI Agent** build step for running autonomous coding
-agents (Claude Code, Codex CLI, Cursor Agent, OpenCode, Antigravity CLI, Gemini CLI, Grok Build, Pi, Kiro CLI)
-in Jenkins jobs and pipelines.
+agents (Claude Code, Codex CLI, Cursor Agent, OpenCode, Antigravity CLI, Gemini CLI, Grok Build,
+Pi, Oh My Pi, and Kiro CLI) in Jenkins jobs and pipelines.
 
 Plugin ID (artifactId): `ai-agent`
 
 ## Features
 
 - **Reusable build step** — add `Run AI Agent` to Freestyle jobs or Pipeline via `aiAgent(...)`.
-- **Multiple agent support** — Claude Code, Codex CLI, Cursor Agent, OpenCode, Antigravity CLI, Gemini CLI, Grok Build, Pi Coding Agent and Kiro CLI.
+- **Multiple agent support:** Claude Code, Codex CLI, Cursor Agent, OpenCode, Antigravity CLI, Gemini CLI,
+  Grok Build, Pi Coding Agent, Oh My Pi (OMP), and Kiro CLI.
 - **Inline conversation view** — live-streaming conversation on the build page with structured display of assistant messages, tool calls with inputs/outputs, and thinking blocks. Multiple invocations in the same build are shown as separate cards (latest expanded, older collapsible).
 - **Markdown rendering** — assistant and result messages are rendered as formatted HTML.
 - **Approval gates** — optionally pause builds for human review before tool execution.
@@ -28,11 +29,12 @@ Plugin ID (artifactId): `ai-agent`
 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | stream-json | Full (tokens + cost) |
 | [Codex CLI](https://github.com/openai/codex) | JSON | Tokens only |
 | [Cursor Agent](https://www.cursor.com/) | stream-json | Tokens only |
-| [OpenCode](https://github.com/opencode-ai/opencode) | JSON | Full (tokens + cost) |
+| [OpenCode](https://opencode.ai/docs/) | JSON | Full (tokens + cost) |
 | [Antigravity CLI](https://antigravity.google/docs/cli/overview) | stream-json | Tokens only |
 | [Gemini CLI](https://github.com/google-gemini/gemini-cli) | stream-json | Tokens only |
 | [Grok Build](https://docs.x.ai/build/overview) | streaming-json / ACP | Full (tokens + cost) |
 | [Pi Coding Agent](https://github.com/earendil-works/pi) | JSON event stream | Full (tokens + cost) |
+| [Oh My Pi (OMP)](https://github.com/can1357/oh-my-pi) | JSON event stream | Full (tokens + cost) |
 | [Kiro CLI](https://kiro.dev/docs/cli/) | stream-json | Tokens only |
 
 ## Screenshot
@@ -80,7 +82,7 @@ Build page showing a Cursor Agent conversation with tool calls, markdown-rendere
 
 The step symbol is `aiAgent`, and agent handlers are referenced by their symbols such as
 `claudeCode()`, `codex()`, `cursor()`, `openCode()`, `antigravity()`, `geminiCli()`,
-`grok()`, `pi()` and `kiro()`.
+`grok()`, `pi()`, `omp()`, and `kiro()`.
 
 Minimal invocation (uses default Claude Code handler):
 
@@ -220,6 +222,52 @@ bidirectional approval channel, so Jenkins manual approvals are rejected. The
 plugin captures assistant text, thinking, tool inputs/outputs, tokens, and cost,
 and fails the build for a final assistant error or abort even if Pi exits zero.
 
+### Oh My Pi (OMP)
+
+Install [`@oh-my-pi/pi-coding-agent`](https://github.com/can1357/oh-my-pi) on every Jenkins node
+that runs OMP jobs. The official Bun package requires Bun 1.3.14 or newer:
+
+```bash
+bun install -g @oh-my-pi/pi-coding-agent
+omp --version
+```
+
+Make sure `omp` is on the Jenkins service account's `PATH`, or set the executable path in the job.
+The built-in CLI flags and JSON event parsing are verified against OMP 18.3.2. Provider
+authentication still depends on a valid Jenkins credential or an OMP login on the node.
+
+```groovy
+aiAgent(
+  agent: omp(),
+  prompt: 'Review the repository and suggest a focused fix',
+  model: 'openai/gpt-5.5',
+  reasoningEffort: 'high',
+  apiCredentialsId: 'openai-api-key',
+  apiEnvVarName: 'OPENAI_API_KEY',
+  requireApprovals: true,
+  approvalTimeoutSeconds: 300
+)
+```
+
+OMP accepts provider-qualified model identifiers. The **Reasoning effort** field maps to
+`--thinking`; supported values include `off`, `minimal`, `low`, `medium`, `high`, `xhigh`,
+`max`, and `auto`. When a Jenkins credential is selected, set **API Key env var override** to
+the environment variable expected by the configured provider, as in the example. Existing OMP
+authentication on the Jenkins node can be used without a Jenkins credential.
+
+With YOLO off, the built-in command enables only OMP's `read`, `grep`, and `glob` tools
+and sets `--approval-mode write`. With YOLO on, OMP's default tools are enabled and its approval
+mode is set to `yolo`. Extension discovery is disabled by the built-in command in both modes.
+These controls are not an OS sandbox. Use an isolated Jenkins node with only the files and
+credentials the job needs. With manual approvals enabled, the plugin uses OMP's ACP command with
+`--approval-mode always-ask`. Jenkins handles standard ACP permission requests and OMP's native
+tool Approve/Deny form. Arbitrary extension dialogs and plan forms fail closed.
+
+Jenkins reserves OMP's execution, output, and session flags, plus CLI help/version/export/alias
+flags and `--acp-terminal-auth` in every mode. Read-only and ACP approval modes also reject
+approval-mode and extension-loading flags such as `--plugin-dir`. Read-only mode rejects `--tools`,
+and ACP mode rejects `--config`. YOLO allows OMP-specific tool, extension, and config options.
+
 ### Pinning a Node.js Version
 
 Some agents (Claude Code, Gemini CLI) are installed via `npx` and require Node.js on the build agent.
@@ -330,6 +378,7 @@ The **Reasoning effort** field is passed only to agents with verified CLI suppor
 - Codex CLI: `-c model_reasoning_effort="<value>"`
 - Claude Code: `--effort <value>`
 - OpenCode: `--variant <value>`
+- Oh My Pi: `--thinking <value>`
 - Antigravity CLI: `--effort <value>` (`low`, `medium`, or `high`)
 - Grok Build: `--reasoning-effort <value>` (`low`, `medium`, or `high`)
 
@@ -339,7 +388,8 @@ For supported agents, the **Model** field also accepts `model:effort` shorthand.
 `gpt-5.6-sol:xhigh` resolves to model `gpt-5.6-sol` and reasoning effort `xhigh`. Recognized
 suffixes depend on the selected agent: Codex accepts `low`, `medium`, `high`, `xhigh`, `max`,
 and `ultra`; Claude Code accepts `low`, `medium`, `high`, `xhigh`, and `max`; OpenCode also
-accepts `minimal`; and Antigravity CLI and Grok Build accept `low`, `medium`, and `high`.
+accepts `minimal`; Oh My Pi accepts `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`,
+and `auto`; and Antigravity CLI and Grok Build accept `low`, `medium`, and `high`.
 Provider-defined support still determines whether a variant is available.
 Other suffixes remain part of the model identifier. Use a double colon to keep a recognized
 suffix literal, such as `provider/model::high` for model `provider/model:high`. A value in
@@ -361,20 +411,31 @@ Prompt and command-line values are not retained in build action metadata because
 
 ### Approval Gates
 
-Manual approvals are supported for OpenCode and Grok Build through their bidirectional Agent
-Client Protocol servers. Jenkins pauses whenever the agent requests tool permission and waits for
-approval or denial from the build page. Denied or timed-out requests fail the build.
+Manual approvals are supported for OpenCode, Grok Build, and Oh My Pi through their bidirectional
+Agent Client Protocol servers. Jenkins pauses whenever the agent requests tool permission and waits
+for approval or denial from the build page. Denied or timed-out requests fail the build.
 
 OpenCode approval jobs use `opencode acp`. Grok approval jobs use `grok agent stdio`, force the
 interactive permission mode even when the node defaults to always-approve, and remove bypass flags
 from extra arguments. Grok ACP authentication prefers an injected `XAI_API_KEY` and falls back to a
 cached node login.
+Oh My Pi approval jobs use `omp acp --approval-mode always-ask` and handle standard ACP permission
+requests plus OMP's native tool Approve/Deny form. Arbitrary extension dialogs and plan forms are
+unsupported and fail closed. Manual-approval jobs reset inherited OMP per-tool allow, deny, and
+prompt rules and apply its `always-ask` policy. An inherited `deny` therefore becomes a Jenkins
+approval decision for calls gated by OMP, while provider settings remain in effect.
 
-Claude Code, Codex CLI, Cursor Agent, Antigravity CLI, Gemini CLI, and command overrides do not expose a supported bidirectional approval channel to this plugin. Jobs reject those combinations before launching instead of showing an approval that cannot affect tool execution.
+Claude Code, Codex CLI, Cursor Agent, Antigravity CLI, Gemini CLI, Pi Coding Agent, and Kiro CLI do
+not expose a supported bidirectional approval channel to this plugin. Jobs reject those combinations
+before launching instead of showing an approval that cannot affect tool execution. Command overrides
+also reject manual approval because they bypass the built-in protocol handler.
 
 ### Usage Statistics
 
-After a build completes, a statistics bar shows token usage, cost (when available), and duration. Data is extracted from the agent's own reporting in the JSONL log. The level of detail depends on the agent — Claude Code, OpenCode, and Grok Build report full cost, while others report only token counts.
+After a build completes, a statistics bar shows token usage, cost (when available), and duration.
+Data is extracted from the agent's own reporting in the JSONL log. The level of detail depends on
+the agent: Claude Code, OpenCode, Grok Build, Pi Coding Agent, and Oh My Pi report full cost, while
+others report token counts.
 
 ## Building
 

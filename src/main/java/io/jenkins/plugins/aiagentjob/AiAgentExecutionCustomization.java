@@ -10,7 +10,7 @@ import java.util.Map;
 
 /**
  * Per-execution customizations contributed by an {@link AiAgentTypeHandler}, including extra
- * environment variables and cleanup hooks.
+ * command arguments, environment variables, and cleanup hooks.
  */
 public final class AiAgentExecutionCustomization {
     @FunctionalInterface
@@ -19,6 +19,7 @@ public final class AiAgentExecutionCustomization {
     }
 
     private final Map<String, String> environment = new LinkedHashMap<>();
+    private final List<String> arguments = new ArrayList<>();
     private final List<CleanupAction> cleanupActions = new ArrayList<>();
 
     public static AiAgentExecutionCustomization empty() {
@@ -31,6 +32,14 @@ public final class AiAgentExecutionCustomization {
 
     public void putEnvironment(String key, String value) {
         environment.put(key, value);
+    }
+
+    public List<String> getArguments() {
+        return List.copyOf(arguments);
+    }
+
+    public void addArguments(List<String> additionalArguments) {
+        arguments.addAll(additionalArguments);
     }
 
     public void addCleanupAction(CleanupAction cleanupAction) {

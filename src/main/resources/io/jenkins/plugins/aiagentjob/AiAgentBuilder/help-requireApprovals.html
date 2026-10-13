@@ -1,6 +1,10 @@
 <div>
-  Supported for OpenCode and Grok Build. The build pauses when the agent requests
+  Supported for OpenCode, Grok Build, and Oh My Pi. The build pauses when the agent requests
   tool permission and waits for approval or denial through the Jenkins UI before
   continuing. Other built-in agents and command overrides reject this setting
-  before launch.
+  before launch. Oh My Pi supports standard ACP permission requests and its native tool
+  Approve/Deny form. Extension dialogs and plan forms are unsupported and fail closed. Manual
+  approval resets inherited OMP per-tool allow, deny, and prompt rules and applies its
+  <code>always-ask</code> policy. An inherited deny becomes a Jenkins approval decision for calls
+  gated by OMP, while provider settings remain in effect.
 </div>

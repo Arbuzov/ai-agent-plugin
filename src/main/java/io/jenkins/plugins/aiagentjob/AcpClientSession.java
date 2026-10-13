@@ -42,6 +42,7 @@ final class AcpClientSession {
     private final Set<String> processEnvironmentVariables = new HashSet<>();
     private final Thread readerThread;
     private long nextRequestId;
+    private String activeSessionId;
 
     AcpClientSession(
             Proc proc,
@@ -120,7 +121,14 @@ final class AcpClientSession {
 
     private JSONObject initialize() throws IOException, InterruptedException {
         JSONObject fileSystem = object("readTextFile", false, "writeTextFile", false);
-        JSONObject capabilities = object("fs", fileSystem, "terminal", false);
+        JSONObject capabilities =
+                object(
+                        "fs",
+                        fileSystem,
+                        "terminal",
+                        false,
+                        "elicitation",
+                        object("form", object()));
         JSONObject params = object("protocolVersion", 1, "clientCapabilities", capabilities);
         return request("initialize", params);
     }
@@ -192,6 +200,7 @@ final class AcpClientSession {
         if (sessionId.isEmpty()) {
             throw new IOException("ACP agent returned no session ID.");
         }
+        activeSessionId = sessionId;
         return new SessionConfiguration(sessionId, result.optJSONArray("configOptions"));
     }
 
@@ -364,6 +373,10 @@ final class AcpClientSession {
                 handlePermissionRequest(message);
                 continue;
             }
+            if ("elicitation/create".equals(incomingMethod) && message.has("id")) {
+                handleApprovalForm(message, "session/prompt".equals(method));
+                continue;
+            }
             if (!incomingMethod.isEmpty() && message.has("id")) {
                 sendMethodNotFound(message.opt("id"), incomingMethod);
                 continue;
@@ -383,7 +396,7 @@ final class AcpClientSession {
                 throw new IOException("ACP " + method + " returned no result.");
             }
             if ("session/prompt".equals(method)) {
-                outputHandler.recordLine(message.toString());
+                recordPromptResponse(message, result);
             }
             return result;
         }
@@ -516,7 +529,7 @@ final class AcpClientSession {
 
     private static boolean shouldRecord(JSONObject message) {
         String method = message.optString("method", "");
-        if ("session/request_permission".equals(method)) {
+        if ("session/request_permission".equals(method) || "elicitation/create".equals(method)) {
             return true;
         }
         if (!"session/update".equals(method)) {
@@ -634,6 +647,134 @@ final class AcpClientSession {
             }
         }
         return null;
+    }
+
+    private void handleApprovalForm(JSONObject request, boolean duringPrompt)
+            throws IOException, InterruptedException {
+        JSONObject params = request.optJSONObject("params");
+        String message = params == null ? "" : params.optString("message", "");
+        if (!duringPrompt
+                || params == null
+                || !"form".equals(params.optString("mode", ""))
+                || !params.optString("sessionId", "").equals(activeSessionId)
+                || !isToolApprovalSchema(params.optJSONObject("requestedSchema"))
+                || !message.startsWith("Allow tool: ")) {
+            send(
+                    object(
+                            "jsonrpc",
+                            JSONRPC_VERSION,
+                            "id",
+                            request.opt("id"),
+                            "error",
+                            object(
+                                    "code",
+                                    -32602,
+                                    "message",
+                                    "Unsupported ACP elicitation form: only tool approval is supported.")));
+            return;
+        }
+
+        String firstLine = message.split("\\R", 2)[0];
+        String toolName = firstLine.substring("Allow tool: ".length()).trim();
+        if (toolName.isEmpty()) {
+            sendMethodNotFound(request.opt("id"), "elicitation/create");
+            return;
+        }
+        ExecutionRegistry.PendingApproval pending =
+                liveExecution.createPendingApproval(
+                        outputHandler.maskSensitiveValues(String.valueOf(request.opt("id"))),
+                        outputHandler.maskSensitiveValues(toolName),
+                        outputHandler.maskSensitiveValues(message));
+        outputHandler.writeStatus(
+                "Approval required: "
+                        + pending.getToolName()
+                        + " ("
+                        + pending.getToolCallId()
+                        + ")");
+        ExecutionRegistry.ApprovalDecision decision =
+                liveExecution.awaitDecision(pending, approvalTimeout);
+        if (!proc.isAlive()) {
+            outputHandler.writeStatus("Approval denied: agent process terminated");
+            throw new ApprovalDeniedException();
+        }
+        send(
+                object(
+                        "jsonrpc",
+                        JSONRPC_VERSION,
+                        "id",
+                        request.opt("id"),
+                        "result",
+                        object(
+                                "action",
+                                "accept",
+                                "content",
+                                object("value", decision.isApproved() ? "Approve" : "Deny"))));
+        if (!decision.isApproved()) {
+            outputHandler.writeStatus("Approval denied: " + decision.getReason());
+            throw new ApprovalDeniedException();
+        }
+        outputHandler.writeStatus("Approval granted: " + pending.getToolName());
+    }
+
+    private static boolean isToolApprovalSchema(JSONObject schema) {
+        if (schema == null
+                || schema.size() != 3
+                || !"object".equals(schema.optString("type", ""))) {
+            return false;
+        }
+        JSONObject properties = schema.optJSONObject("properties");
+        JSONArray required = schema.optJSONArray("required");
+        if (properties == null
+                || properties.size() != 1
+                || required == null
+                || required.size() != 1
+                || !"value".equals(required.get(0))) {
+            return false;
+        }
+        JSONObject value = properties.optJSONObject("value");
+        JSONArray choices = value == null ? null : value.optJSONArray("enum");
+        return value != null
+                && value.size() == 2
+                && "string".equals(value.optString("type", ""))
+                && choices != null
+                && choices.size() == 2
+                && "Approve".equals(choices.get(0))
+                && "Deny".equals(choices.get(1));
+    }
+
+    private void recordPromptResponse(JSONObject message, JSONObject result) throws IOException {
+        JSONObject usage = result.optJSONObject("usage");
+        if (usage == null) {
+            outputHandler.recordLine(message.toString());
+            return;
+        }
+        JSONObject recordedUsage = new JSONObject();
+        for (String key :
+                List.of(
+                        "inputTokens",
+                        "outputTokens",
+                        "totalTokens",
+                        "cachedReadTokens",
+                        "cachedWriteTokens",
+                        "thoughtTokens")) {
+            Object value = usage.opt(key);
+            if (value instanceof Number) {
+                recordedUsage.put(key, value);
+            }
+        }
+        JSONObject recordedResult = object("usage", recordedUsage);
+        if (result.opt("stopReason") instanceof String) {
+            recordedResult.put("stopReason", result.getString("stopReason"));
+        }
+        outputHandler.recordLine(
+                object(
+                                "jsonrpc",
+                                JSONRPC_VERSION,
+                                "id",
+                                message.opt("id"),
+                                "result",
+                                recordedResult)
+                        .toString());
     }
 
     private void sendMethodNotFound(Object id, String method) throws IOException {
