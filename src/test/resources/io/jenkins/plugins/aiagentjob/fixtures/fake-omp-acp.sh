@@ -2,15 +2,21 @@
 set -eu
 test "$1" = acp
 policy=''
-previous=''
-for arg in "$@"; do
-  if [ "$previous" = '--config' ]; then policy="$arg"; fi
-  previous="$arg"
+approval_mode=yolo
+shift
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --system-prompt) shift 2 ;;
+    --approval-mode) approval_mode="$2"; shift 2 ;;
+    --config) policy="$2"; shift 2 ;;
+    *) shift ;;
+  esac
 done
 [ -n "$policy" ] && [ -f "$policy" ] || exit 95
-[ "$(cat "$policy")" = "$(printf 'tools:\n  approval: null\n')" ] || exit 96
+grep -q '^  approval: null$' "$policy" || exit 96
+policy_mode=$(sed -n 's/^  approvalMode: //p' "$policy")
+if [ -n "$policy_mode" ]; then approval_mode="$policy_mode"; fi
 printf '%s' "$policy" > approval-policy-path
-case "$*" in *'--approval-mode always-ask'*) ;; *) exit 90 ;; esac
 
 IFS= read -r request
 case "$request" in *'"form":{}'*) ;; *) exit 91 ;; esac
@@ -41,10 +47,12 @@ while IFS= read -r request; do
   esac
 done
 printf '%s\n' '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"omp-fixture","update":{"sessionUpdate":"tool_call","toolCallId":"omp-write","title":"write approved.txt","kind":"edit","status":"pending","rawInput":{"path":"approved.txt"}}}}'
-printf '{"jsonrpc":"2.0","id":"omp-approval","method":"elicitation/create","params":{"mode":"form","sessionId":"omp-fixture","message":"Allow tool: write\\nPath: approved.txt\\nContent: %s","requestedSchema":{"type":"object","properties":{"value":{"type":"string","enum":["Approve","Deny"]}},"required":["value"]}}}\n' "$OPENAI_API_KEY"
-IFS= read -r response
-printf '%s\n' "$response" > approval-response.json
-case "$response" in *'"action":"accept"'*'"value":"Approve"'*) ;; *) exit 94 ;; esac
+if [ "$approval_mode" = always-ask ]; then
+  printf '{"jsonrpc":"2.0","id":"omp-approval","method":"elicitation/create","params":{"mode":"form","sessionId":"omp-fixture","message":"Allow tool: write\\nPath: approved.txt\\nContent: %s","requestedSchema":{"type":"object","properties":{"value":{"type":"string","enum":["Approve","Deny"]}},"required":["value"]}}}\n' "$OPENAI_API_KEY"
+  IFS= read -r response
+  printf '%s\n' "$response" > approval-response.json
+  case "$response" in *'"action":"accept"'*'"value":"Approve"'*) ;; *) exit 94 ;; esac
+fi
 touch approved.txt
 printf '%s\n' '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"omp-fixture","update":{"sessionUpdate":"tool_call_update","toolCallId":"omp-write","status":"completed","rawOutput":"created approved.txt"}}}}'
 printf '%s\n' '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"omp-fixture","update":{"sessionUpdate":"usage_update","used":999,"size":10000,"cost":{"currency":"USD","amount":0.012}}}}'

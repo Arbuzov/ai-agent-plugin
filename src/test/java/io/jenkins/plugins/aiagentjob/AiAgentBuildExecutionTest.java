@@ -1461,7 +1461,7 @@ class AiAgentBuildExecutionTest {
 
     @Test
     @EnabledOnOs(OS.LINUX)
-    void ompAcpWaitsForToolFormApprovalAndCapturesUsage(JenkinsRule jenkins) throws Exception {
+    void ompAcpKeepsToolFormApprovalWithDanglingExtraArgs(JenkinsRule jenkins) throws Exception {
         String key = "omp-form-synthetic-key";
         CredentialsProvider.lookupStores(jenkins.getInstance())
                 .iterator()
@@ -1483,6 +1483,7 @@ class AiAgentBuildExecutionTest {
                             b.setPrompt("Create approved.txt");
                             b.setExecutablePath(new File(bin, "omp").getAbsolutePath());
                             b.setModel("fixture/model:high");
+                            b.setExtraArgs("--system-prompt");
                             b.setRequireApprovals(true);
                             b.setApprovalTimeoutSeconds(30);
                             b.setApiCredentialsId("omp-form-key");

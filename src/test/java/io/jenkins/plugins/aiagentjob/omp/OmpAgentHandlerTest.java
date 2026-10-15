@@ -202,7 +202,9 @@ class OmpAgentHandlerTest {
         assertEquals(2, customization.getArguments().size());
         Path override = Path.of(customization.getArguments().get(1));
         assertFalse(override.startsWith(temp.resolve("workspace")));
-        assertEquals("tools:\n  approval: null\n", Files.readString(override));
+        assertEquals(
+                "tools:\n  approvalMode: always-ask\n  approval: null\n",
+                Files.readString(override));
         if (override.getFileSystem().supportedFileAttributeViews().contains("posix")) {
             assertEquals(
                     java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"),

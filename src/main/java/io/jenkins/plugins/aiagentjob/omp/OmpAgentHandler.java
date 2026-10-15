@@ -211,8 +211,8 @@ public final class OmpAgentHandler extends AiAgentTypeHandler {
                 AiAgentTempFiles.tempRoot(workspace)
                         .child("ai-agent-omp-approval-" + UUID.randomUUID() + ".yml");
         try {
-            // Null clears inherited per-tool grants without replacing provider or model settings.
-            override.write("tools:\n  approval: null\n", "UTF-8");
+            // Also enforce the mode here: a dangling extra flag can consume the CLI override.
+            override.write("tools:\n  approvalMode: always-ask\n  approval: null\n", "UTF-8");
             override.chmod(0600);
         } catch (IOException | InterruptedException e) {
             try {
