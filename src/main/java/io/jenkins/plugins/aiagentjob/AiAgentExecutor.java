@@ -153,6 +153,10 @@ final class AiAgentExecutor {
             } else {
                 agentCommand = AiAgentCommandFactory.buildDefaultCommand(commandConfig, prompt);
             }
+            if (commandOverride.isEmpty() && !executionCustomization.getArguments().isEmpty()) {
+                agentCommand = new ArrayList<>(agentCommand);
+                agentCommand.addAll(executionCustomization.getArguments());
+            }
 
             boolean needsShellEnvironmentBootstrap =
                     launcher.isUnix() && !executionCustomization.getEnvironment().isEmpty();

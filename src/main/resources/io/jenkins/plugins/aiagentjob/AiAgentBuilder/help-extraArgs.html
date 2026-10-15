@@ -4,4 +4,9 @@
   Arguments are split on whitespace.
   During ACP approval runs, the handler may reposition or ignore arguments that
   are incompatible with ACP or manual approvals.
+  For Oh My Pi, Jenkins reserves execution, output, and session flags, CLI help/version/export/alias
+  options, and <code>--acp-terminal-auth</code> in every mode. Read-only and ACP approval jobs also
+  reserve approval and extension-loading options, including <code>--plugin-dir</code>. Read-only
+  jobs reserve tool-list options; ACP approval jobs reserve config-file options. YOLO jobs allow
+  OMP-specific tool, extension, and config options.
 </div>

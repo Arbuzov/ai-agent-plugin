@@ -36,6 +36,7 @@ import io.jenkins.plugins.aiagentjob.claudecode.ClaudeCodeStatsExtractor;
 import io.jenkins.plugins.aiagentjob.codex.CodexAgentHandler;
 import io.jenkins.plugins.aiagentjob.cursor.CursorAgentHandler;
 import io.jenkins.plugins.aiagentjob.grokbuild.GrokBuildAgentHandler;
+import io.jenkins.plugins.aiagentjob.omp.OmpAgentHandler;
 import io.jenkins.plugins.aiagentjob.opencode.OpenCodeAgentHandler;
 import io.jenkins.plugins.aiagentjob.pi.PiAgentHandler;
 
@@ -1363,6 +1364,176 @@ class AiAgentBuildExecutionTest {
         jenkins.assertBuildStatus(Result.FAILURE, project.scheduleBuild2(0).get());
         builder.setFailOnAgentError(false);
         jenkins.buildAndAssertSuccess(project);
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void ompRunsOnRemoteNodeAndPropagatesJsonFailures(JenkinsRule jenkins) throws Exception {
+        String key = "omp-synthetic-key";
+        CredentialsProvider.lookupStores(jenkins.getInstance())
+                .iterator()
+                .next()
+                .addCredentials(
+                        Domain.global(),
+                        new StringCredentialsImpl(
+                                CredentialsScope.GLOBAL,
+                                "omp-key",
+                                "OMP fixture key",
+                                Secret.fromString(key)));
+        File bin =
+                installExecutable(
+                        jenkins,
+                        "omp-bin",
+                        "omp",
+                        """
+                #!/bin/sh
+                set -eu
+                [ "$1" = '--print' ] || exit 90
+                [ "$2" = '--mode' ] || exit 91
+                [ "$3" = 'json' ] || exit 92
+                [ "$OPENAI_API_KEY" = 'omp-synthetic-key' ] || exit 93
+                approval=''
+                model=''
+                thinking=''
+                while [ "$#" -gt 0 ]; do
+                  case "$1" in
+                    --approval-mode) approval="$2"; shift 2 ;;
+                    --model) model="$2"; shift 2 ;;
+                    --thinking) thinking="$2"; shift 2 ;;
+                    *) shift ;;
+                  esac
+                done
+                [ "$approval" = 'yolo' ] || exit 94
+                [ "$model" = 'fixture/model' ] || exit 95
+                [ "$thinking" = 'high' ] || exit 96
+                cat "$(dirname "$0")/conversation.jsonl"
+                printf '{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"key=%s"}],"stopReason":"stop"}}\\n' "$OPENAI_API_KEY"
+                if [ "${OMP_TEST_FAIL:-}" = 'true' ]; then
+                  echo '{"type":"message_end","message":{"role":"assistant","content":[],"stopReason":"error","errorMessage":"fixture provider error"}}'
+                fi
+                """);
+        try (InputStream fixture =
+                getClass().getResourceAsStream("fixtures/omp-conversation.jsonl")) {
+            assertNotNull(fixture);
+            Files.copy(fixture, new File(bin, "conversation.jsonl").toPath());
+        }
+        FreeStyleProject project =
+                newProject(
+                        jenkins,
+                        "omp-execution",
+                        b -> {
+                            b.setAgent(new OmpAgentHandler());
+                            b.setPrompt("Review the project");
+                            b.setExecutablePath(new File(bin, "omp").getAbsolutePath());
+                            b.setModel("fixture/model:high");
+                            b.setApiCredentialsId("omp-key");
+                            b.setApiEnvVarName("OPENAI_API_KEY");
+                            b.setYoloMode(true);
+                            b.setFailOnAgentError(true);
+                        });
+        project.setAssignedNode(jenkins.createOnlineSlave());
+        project = jenkins.configRoundtrip(project);
+        AiAgentBuilder builder = (AiAgentBuilder) project.getBuildersList().get(0);
+        assertEquals("OMP", builder.getAgent().getId());
+        assertEquals("fixture/model:high", builder.getModel());
+        assertEquals("OPENAI_API_KEY", builder.getEffectiveApiKeyEnvVar());
+        FreeStyleBuild build = jenkins.buildAndAssertSuccess(project);
+        AiAgentRunAction action = build.getAction(AiAgentRunAction.class);
+        assertNotNull(action);
+        assertTrue(
+                action.getEvents().stream()
+                        .anyMatch(e -> "The check passed.".equals(e.getContent())));
+        assertEquals(220, action.getUsageStats().getTotalTokens());
+        assertEquals(8, action.getUsageStats().getReasoningTokens());
+        assertEquals(0.012, action.getUsageStats().getCostUsd(), 0.000001);
+        assertEquals(1, action.getUsageStats().getToolCalls());
+        assertFalse(jenkins.getLog(build).contains(key));
+        assertFalse(Files.readString(action.getRawLogFile().toPath()).contains(key));
+        builder.setEnvironmentVariables("OMP_TEST_FAIL=true");
+        FreeStyleBuild failed = project.scheduleBuild2(0).get();
+        jenkins.assertBuildStatus(Result.FAILURE, failed);
+        assertTrue(
+                failed.getAction(AiAgentRunAction.class).getEvents().stream()
+                        .anyMatch(e -> "fixture provider error".equals(e.getContent())));
+        builder.setFailOnAgentError(false);
+        jenkins.buildAndAssertSuccess(project);
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void ompAcpKeepsToolFormApprovalWithDanglingExtraArgs(JenkinsRule jenkins) throws Exception {
+        String key = "omp-form-synthetic-key";
+        CredentialsProvider.lookupStores(jenkins.getInstance())
+                .iterator()
+                .next()
+                .addCredentials(
+                        Domain.global(),
+                        new StringCredentialsImpl(
+                                CredentialsScope.GLOBAL,
+                                "omp-form-key",
+                                "OMP form fixture key",
+                                Secret.fromString(key)));
+        File bin = installFakeAcp(jenkins, "omp-acp-bin", "omp", "fake-omp-acp.sh");
+        FreeStyleProject project =
+                newProject(
+                        jenkins,
+                        "omp-acp-approval",
+                        b -> {
+                            b.setAgent(new OmpAgentHandler());
+                            b.setPrompt("Create approved.txt");
+                            b.setExecutablePath(new File(bin, "omp").getAbsolutePath());
+                            b.setModel("fixture/model:high");
+                            b.setExtraArgs("--system-prompt");
+                            b.setRequireApprovals(true);
+                            b.setApprovalTimeoutSeconds(30);
+                            b.setApiCredentialsId("omp-form-key");
+                            b.setApiEnvVarName("OPENAI_API_KEY");
+                            b.setFailOnAgentError(true);
+                        });
+        project.setAssignedNode(jenkins.createOnlineSlave());
+        QueueTaskFuture<FreeStyleBuild> future = project.scheduleBuild2(0);
+        assertNotNull(future);
+        FreeStyleBuild runningBuild = future.waitForStart();
+        ExecutionRegistry.PendingApproval pending =
+                waitForPendingApproval(jenkins, runningBuild, future);
+        assertEquals("write", pending.getToolName());
+        assertTrue(pending.getInputSummary().contains("****"));
+        assertFalse(pending.getInputSummary().contains(key));
+        FilePath workspace = runningBuild.getWorkspace();
+        assertNotNull(workspace);
+        assertFalse(workspace.child("approved.txt").exists());
+        FilePath policy =
+                new FilePath(
+                        workspace.getChannel(),
+                        workspace.child("approval-policy-path").readToString());
+        assertTrue(policy.exists());
+        AiAgentRunAction action = runningBuild.getAction(AiAgentRunAction.class);
+        assertNotNull(action);
+        ExecutionRegistry.LiveExecution execution =
+                ExecutionRegistry.get(runningBuild, action.getLatestInvocationId());
+        assertNotNull(execution);
+        assertTrue(execution.approve(pending.getId()));
+        FreeStyleBuild build = future.get(20, TimeUnit.SECONDS);
+        jenkins.assertBuildStatusSuccess(build);
+        assertFalse(policy.exists());
+        assertTrue(workspace.child("approved.txt").exists());
+        assertTrue(
+                workspace
+                        .child("approval-response.json")
+                        .readToString()
+                        .contains("\"value\":\"Approve\""));
+        String selections = workspace.child("config-requests.jsonl").readToString();
+        assertTrue(selections.contains("\"configId\":\"model\",\"value\":\"fixture/model\""));
+        assertTrue(selections.contains("\"configId\":\"thinking\",\"value\":\"high\""));
+        assertEquals(40, action.getUsageStats().getTotalTokens());
+        assertEquals(30, action.getUsageStats().getInputTokens());
+        assertEquals(10, action.getUsageStats().getOutputTokens());
+        assertEquals(0.012, action.getUsageStats().getCostUsd(), 0.000001);
+        assertEquals(1, action.getUsageStats().getToolCalls());
+        String rawLog = Files.readString(action.getRawLogFile().toPath());
+        assertTrue(rawLog.contains("elicitation/create"));
+        assertFalse(rawLog.contains(key));
+        assertFalse(jenkins.getLog(build).contains(key));
     }
 
     private static File installFakeGrok(JenkinsRule jenkins, String directoryName)

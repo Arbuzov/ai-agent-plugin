@@ -26,7 +26,7 @@ import java.util.Set;
  * </ul>
  *
  * <p>Implementations may optionally override {@link #prepareExecution} to contribute agent-specific
- * environment setup/cleanup.
+ * arguments and environment setup/cleanup.
  */
 public abstract class AiAgentTypeHandler extends AbstractDescribableImpl<AiAgentTypeHandler>
         implements ExtensionPoint {
@@ -50,7 +50,7 @@ public abstract class AiAgentTypeHandler extends AbstractDescribableImpl<AiAgent
         if (!supportsManualApprovals()) {
             throw new IllegalArgumentException(
                     "Manual approvals require an ACP-capable agent. Disable manual approvals or "
-                            + "use OpenCode or Grok Build.");
+                            + "use OpenCode, Grok Build, or OMP.");
         }
     }
 
