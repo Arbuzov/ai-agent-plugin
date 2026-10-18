@@ -29,8 +29,15 @@ public final class CursorLogFormat implements AiAgentLogFormat {
 
         // Cursor emits "thinking" events
         if (typeLower.equals("thinking")) {
-            String thinkText = LogFormatUtils.firstNonEmpty(json, "text");
-            return AiAgentLogParser.ParsedLine.thinking(lineNumber, thinkText, json.toString(2));
+            String thinkText = json.optString("text", "");
+            if (thinkText.isEmpty()) {
+                return AiAgentLogParser.ParsedLine.raw(lineNumber, "");
+            }
+            return AiAgentLogParser.ParsedLine.thinking(
+                    lineNumber,
+                    thinkText,
+                    json.toString(2),
+                    "delta".equals(json.optString("subtype", "")));
         }
 
         // Cursor-specific tool_call with subtype started/completed

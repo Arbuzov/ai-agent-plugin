@@ -1,0 +1,9 @@
+{"type":"system","subtype":"init","model":"fixture-model","session_id":"fixture-cursor-stream","cwd":"/workspace/fixture"}
+{"type":"thinking","subtype":"delta","text":"Read"}
+{"type":"thinking","subtype":"delta","text":" "}
+{"type":"thinking","subtype":"delta","text":"the fixture."}
+{"type":"thinking","subtype":"completed"}
+{"type":"tool_call","subtype":"started","call_id":"fixture-read","tool_call":{"readToolCall":{"args":{"path":"/workspace/fixture/fixture.txt"}}}}
+{"type":"tool_call","subtype":"completed","call_id":"fixture-read","tool_call":{"readToolCall":{"args":{"path":"/workspace/fixture/fixture.txt"},"result":{"success":{"content":"fixture content\n","isEmpty":false,"totalLines":1}}}}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"CURSOR_SMOKE_OK"}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"CURSOR_SMOKE_OK","duration_ms":1200,"usage":{"inputTokens":1200,"outputTokens":40,"cacheReadTokens":900,"cacheWriteTokens":0}}

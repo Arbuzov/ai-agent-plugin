@@ -1,0 +1,12 @@
+{"type":"available_commands","tools":[],"commands":[{"name":"fixture-command","description":"Synthetic command"}]}
+{"type":"text","data":"Reading"}
+{"type":"usage","usage":{"input_tokens":1000,"output_tokens":20,"cache_read_input_tokens":800}}
+{"type":"available_commands","tools":[],"commands":[]}
+{"type":"text","data":" the fixture."}
+{"type":"tool_call","toolCallId":"fixture-read","title":"read_file","kind":"read","status":"pending","toolName":"read_file","rawInput":{"target_file":"/workspace/fixture/fixture.txt"},"content":[],"locations":[]}
+{"type":"tool_call_update","toolCallId":"fixture-read","status":null,"content":[],"rawOutput":null,"locations":[{"path":"/workspace/fixture/fixture.txt"}]}
+{"type":"tool_call_update","toolCallId":"fixture-read","status":"in_progress","content":[],"rawOutput":null,"locations":[]}
+{"type":"tool_call_update","toolCallId":"fixture-read","status":"completed","content":[{"type":"content","content":{"type":"text","text":"1: fixture content\n"}}],"rawOutput":{"type":"ReadFile","FileContent":{"raw_output":"fixture content\n"}},"locations":[]}
+{"type":"text","data":"GROK_SMOKE_OK"}
+{"type":"usage","usage":{"input_tokens":200,"output_tokens":20,"cache_read_input_tokens":200}}
+{"type":"end","stopReason":"end_turn","usage":{"input_tokens":1200,"output_tokens":40,"cache_read_input_tokens":1000,"total_tokens":2240},"num_turns":2,"total_cost_usd":0.002,"modelUsage":{"fixture-grok-model":{"modelCalls":2}}}

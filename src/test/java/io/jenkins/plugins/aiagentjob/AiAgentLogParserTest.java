@@ -294,6 +294,20 @@ class AiAgentLogParserTest {
     // ======================== Cursor Agent Tests ========================
 
     @Test
+    void cursorAgentStreaming_mergesThinkingAndHidesCompletionMarkers() throws IOException {
+        List<AiAgentLogParser.EventView> events =
+                parseFixture("cursor-agent-streaming.jsonl", CursorLogFormat.INSTANCE);
+
+        assertEquals(
+                List.of("system", "thinking", "tool_call", "tool_result", "assistant"),
+                categories(events));
+        assertEquals("Read the fixture.", events.get(1).getContent());
+        assertEquals("/workspace/fixture/fixture.txt", events.get(2).getToolInput());
+        assertEquals("fixture content\n", events.get(3).getToolOutput());
+        assertEquals("CURSOR_SMOKE_OK", events.get(4).getContent());
+    }
+
+    @Test
     void cursorAgentConversation_parsesAllTypes() throws IOException {
         List<AiAgentLogParser.EventView> events =
                 parseFixture("cursor-agent-conversation.jsonl", CursorLogFormat.INSTANCE);
@@ -511,6 +525,35 @@ class AiAgentLogParserTest {
     }
 
     // ======================== Grok Build Tests ========================
+
+    @Test
+    void grokBuildHeadless_hidesMetadataAndIncompleteToolResults() throws IOException {
+        List<AiAgentLogParser.EventView> events =
+                parseFixture("grok-build-tool-progress.jsonl", GrokBuildLogFormat.INSTANCE);
+
+        assertEquals(
+                List.of("assistant", "tool_call", "tool_result", "assistant", "result"),
+                categories(events));
+        assertEquals("Reading the fixture.", events.get(0).getContent());
+        assertEquals("1: fixture content", events.get(2).getToolOutput());
+        assertEquals("GROK_SMOKE_OK", events.get(3).getContent());
+        assertEquals("End_turn", events.get(4).getContent());
+    }
+
+    @Test
+    void grokBuildHeadless_reportsTerminalToolStatusWithoutOutput() {
+        for (String status : List.of("completed", "failed")) {
+            String json =
+                    "{\"type\":\"tool_call_update\",\"toolCallId\":\"fixture-tool\",\"status\":\""
+                            + status
+                            + "\",\"content\":[],\"rawOutput\":null}";
+            AiAgentLogParser.EventView event =
+                    AiAgentLogParser.parseLine(1, json, GrokBuildLogFormat.INSTANCE).toEventView();
+
+            assertEquals("tool_result", event.getCategory());
+            assertEquals(LogFormatUtils.capitalize(status), event.getToolOutput());
+        }
+    }
 
     @Test
     void grokBuildHeadless_mergesStreamingChunksWithoutLosingWhitespace() throws IOException {
