@@ -48,6 +48,16 @@ public final class PiLogFormat implements AiAgentLogFormat {
 
     @Override
     public List<ParsedLine> classifyAll(long lineNumber, JSONObject json) {
+        return classifyAll(lineNumber, json, false);
+    }
+
+    /** Classifies OMP messages while omitting tool intent metadata from visible tool inputs. */
+    public List<ParsedLine> classifyOmpAll(long lineNumber, JSONObject json) {
+        return classifyAll(lineNumber, json, true);
+    }
+
+    private List<ParsedLine> classifyAll(
+            long lineNumber, JSONObject json, boolean ompIntentMetadata) {
         String type = json.optString("type");
         String raw = json.toString(2);
         if ("message_update".equals(type)) {
@@ -58,6 +68,7 @@ public final class PiLogFormat implements AiAgentLogFormat {
             if ("text_end".equals(eventType) || "thinking_end".equals(eventType)) {
                 boolean thinking = "thinking_end".equals(eventType);
                 String text = event.optString("content");
+                if (thinking && text.isBlank()) return List.of();
                 ParsedLine line =
                         thinking
                                 ? ParsedLine.thinking(lineNumber, text, raw)
@@ -69,13 +80,17 @@ public final class PiLogFormat implements AiAgentLogFormat {
             }
             if ("toolcall_end".equals(eventType)) {
                 JSONObject tool = event.optJSONObject("toolCall");
-                return tool == null ? List.of() : List.of(toolCall(lineNumber, tool, raw));
+                return tool == null
+                        ? List.of()
+                        : List.of(toolCall(lineNumber, tool, raw, ompIntentMetadata));
             }
             return List.of();
         }
         if ("message_end".equals(type)) {
             JSONObject message = json.optJSONObject("message");
-            return message == null ? List.of() : message(lineNumber, message, raw);
+            return message == null
+                    ? List.of()
+                    : message(lineNumber, message, raw, ompIntentMetadata);
         }
         if ("tool_execution_start".equals(type)) {
             return List.of(
@@ -101,7 +116,8 @@ public final class PiLogFormat implements AiAgentLogFormat {
         return HIDDEN_EVENTS.contains(type) ? List.of() : null;
     }
 
-    private static List<ParsedLine> message(long number, JSONObject message, String raw) {
+    private static List<ParsedLine> message(
+            long number, JSONObject message, String raw, boolean ompIntentMetadata) {
         String role = message.optString("role");
         if ("user".equals(role)) {
             return List.of(
@@ -135,11 +151,14 @@ public final class PiLogFormat implements AiAgentLogFormat {
                                             raw)
                                     .withDeduplicationKey(contentKey(message, i)));
                 } else if ("thinking".equals(type)) {
-                    lines.add(
-                            ParsedLine.thinking(number, block.optString("thinking"), raw)
-                                    .withDeduplicationKey(contentKey(message, i)));
+                    String thinking = block.optString("thinking");
+                    if (!thinking.isBlank()) {
+                        lines.add(
+                                ParsedLine.thinking(number, thinking, raw)
+                                        .withDeduplicationKey(contentKey(message, i)));
+                    }
                 } else if ("toolCall".equals(type)) {
-                    lines.add(toolCall(number, block, raw));
+                    lines.add(toolCall(number, block, raw, ompIntentMetadata));
                 }
             }
         }
@@ -157,14 +176,18 @@ public final class PiLogFormat implements AiAgentLogFormat {
         return lines;
     }
 
-    private static ParsedLine toolCall(long number, JSONObject tool, String raw) {
+    private static ParsedLine toolCall(
+            long number, JSONObject tool, String raw, boolean ompIntentMetadata) {
         String id = tool.optString("id");
-        return ParsedLine.toolCall(
-                        number,
-                        tool.optString("name"),
-                        arguments(tool.optJSONObject("arguments")),
-                        raw,
-                        id)
+        JSONObject args = tool.optJSONObject("arguments");
+        Object intent = tool.opt("intent");
+        if (ompIntentMetadata && args != null && intent != null && intent.equals(args.opt("i"))) {
+            JSONObject visibleArgs = new JSONObject();
+            visibleArgs.putAll(args);
+            visibleArgs.remove("i");
+            args = visibleArgs;
+        }
+        return ParsedLine.toolCall(number, tool.optString("name"), arguments(args), raw, id)
                 .withDeduplicationKey(toolKey("call", id));
     }
 

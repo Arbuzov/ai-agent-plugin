@@ -10,8 +10,8 @@ import hudson.model.FreeStyleBuild;
 import hudson.model.FreeStyleProject;
 import hudson.security.csrf.DefaultCrumbIssuer;
 
+import io.jenkins.plugins.aiagentjob.claudecode.ClaudeCodeAgentHandler;
 import io.jenkins.plugins.aiagentjob.codex.CodexAgentHandler;
-import io.jenkins.plugins.aiagentjob.geminicli.GeminiCliAgentHandler;
 
 import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
@@ -117,8 +117,8 @@ class AiAgentRunActionTest {
                         jenkins,
                         "test-props",
                         b -> {
-                            b.setAgent(new GeminiCliAgentHandler());
-                            b.setModel("gemini-2.5-pro");
+                            b.setAgent(new ClaudeCodeAgentHandler());
+                            b.setModel("claude-opus-4");
                             b.setYoloMode(true);
                             b.setCommandOverride(
                                     "echo '{\"type\":\"result\",\"result\":\"done\"}'");
@@ -128,8 +128,8 @@ class AiAgentRunActionTest {
         AiAgentRunAction action = build.getAction(AiAgentRunAction.class);
         assertNotNull(action);
 
-        assertEquals("Gemini CLI", action.getAgentType());
-        assertEquals("gemini-2.5-pro", action.getModel());
+        assertEquals("Claude Code", action.getAgentType());
+        assertEquals("claude-opus-4", action.getModel());
         assertTrue(action.isYoloMode());
         assertFalse(action.isApprovalsEnabled());
         assertEquals(Integer.valueOf(0), action.getExitCode());

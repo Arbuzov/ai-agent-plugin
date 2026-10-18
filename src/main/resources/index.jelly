@@ -1,7 +1,7 @@
 <?jelly escape-by-default='true'?>
 <div>
   Adds a reusable <strong>Run AI Agent</strong> build step for running Claude Code, Codex CLI,
-  Cursor Agent, OpenCode, Antigravity CLI, Gemini CLI, Grok Build, Pi Coding Agent, Oh My Pi
+  Cursor Agent, OpenCode, Antigravity CLI, Grok Build, Pi Coding Agent, Oh My Pi
   (OMP), and Kiro CLI with interactive conversation logs and optional ACP approval gates for
   supported agents.
 </div>

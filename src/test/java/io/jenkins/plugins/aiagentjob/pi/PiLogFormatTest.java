@@ -5,7 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.jenkins.plugins.aiagentjob.AgentUsageStats;
+import io.jenkins.plugins.aiagentjob.AiAgentLogFormat;
 import io.jenkins.plugins.aiagentjob.AiAgentLogParser;
+import io.jenkins.plugins.aiagentjob.omp.OmpLogFormat;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -43,6 +45,45 @@ class PiLogFormatTest {
         assertEquals("safe-ok\n", events.get(4).getToolOutput());
         assertEquals("bash", events.get(4).getLabel());
         assertEquals("The check passed.", events.get(5).getContent());
+    }
+
+    @Test
+    void retainsPiToolArgumentNamedI() throws Exception {
+        Path file = temp.resolve("tool-argument-i.jsonl");
+        Files.writeString(
+                file,
+                """
+                {"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"pi-call-01","name":"custom","arguments":{"i":"actual tool argument","path":"fixture.txt"}}]}}
+                """);
+
+        List<AiAgentLogParser.EventView> events =
+                AiAgentLogParser.parse(file.toFile(), PiLogFormat.INSTANCE);
+        assertEquals(1, events.size());
+        assertEquals("tool_call", events.get(0).getCategory());
+        assertTrue(events.get(0).getToolInput().contains("actual tool argument"));
+    }
+
+    @Test
+    void ignoresBlankThinkingBlocksWhilePreservingReasoningAndAnswer() throws Exception {
+        Path file = temp.resolve("blank-thinking.jsonl");
+        Files.writeString(
+                file,
+                """
+                {"type":"message_update","message":{"role":"assistant","timestamp":1000},"assistantMessageEvent":{"type":"thinking_end","contentIndex":0,"content":""}}
+                {"type":"message_end","message":{"role":"assistant","timestamp":1000,"content":[{"type":"thinking","thinking":"","thinkingSignature":"synthetic-signature"}]}}
+                {"type":"message_update","message":{"role":"assistant","timestamp":1001},"assistantMessageEvent":{"type":"thinking_end","contentIndex":0,"content":"Use iterative addition."}}
+                {"type":"message_end","message":{"role":"assistant","timestamp":1001,"content":[{"type":"thinking","thinking":"Use iterative addition."}]}}
+                {"type":"message_update","message":{"role":"assistant","timestamp":1002},"assistantMessageEvent":{"type":"thinking_end","contentIndex":0,"content":"  "}}
+                {"type":"message_end","message":{"role":"assistant","timestamp":1002,"content":[{"type":"thinking","thinking":"  "},{"type":"text","text":"The result is 6765."}]}}
+                """);
+        for (AiAgentLogFormat format : List.of(PiLogFormat.INSTANCE, OmpLogFormat.INSTANCE)) {
+            List<AiAgentLogParser.EventView> events = AiAgentLogParser.parse(file.toFile(), format);
+            assertEquals(
+                    List.of("thinking", "assistant"),
+                    events.stream().map(AiAgentLogParser.EventView::getCategory).toList());
+            assertEquals("Use iterative addition.", events.get(0).getContent());
+            assertEquals("The result is 6765.", events.get(1).getContent());
+        }
     }
 
     @Test

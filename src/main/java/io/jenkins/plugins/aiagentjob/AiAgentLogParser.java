@@ -29,7 +29,7 @@ import java.util.Map;
  *
  * <ul>
  *   <li>Antigravity CLI log format — Antigravity stream-json
- *   <li>Claude Code log format — Claude Code / Gemini CLI stream-json
+ *   <li>Claude Code log format — Claude Code / legacy Gemini CLI stream-json recordings
  *   <li>Codex log format — Codex CLI JSONL
  *   <li>Cursor log format — Cursor Agent stream-json
  *   <li>OpenCode log format — OpenCode JSONL
@@ -652,13 +652,12 @@ public final class AiAgentLogParser {
         /** One-line summary for progressive events API backwards compat. */
         public String getSummary() {
             String contentText = getContent();
-            if (!contentText.isEmpty()) {
-                String compact = contentText.replaceAll("\\s+", " ").trim();
-                if (compact.length() > 180) compact = compact.substring(0, 177) + "...";
-                return label + ": " + compact;
-            }
-            if (!toolInput.isEmpty()) {
-                String compact = toolInput.replaceAll("\\s+", " ").trim();
+            String summaryText =
+                    !contentText.isEmpty()
+                            ? contentText
+                            : !toolInput.isEmpty() ? toolInput : toolOutput;
+            if (!summaryText.isEmpty()) {
+                String compact = summaryText.replaceAll("\\s+", " ").trim();
                 if (compact.length() > 180) compact = compact.substring(0, 177) + "...";
                 return label + ": " + compact;
             }

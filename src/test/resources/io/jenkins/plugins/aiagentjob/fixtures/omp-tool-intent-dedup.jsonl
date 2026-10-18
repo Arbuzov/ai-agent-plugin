@@ -1,0 +1,4 @@
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"fixture-call-01","name":"read","arguments":{"i":"Reading project requirements","path":"requirements.txt"},"intent":"Reading project requirements"}]}}
+{"type":"tool_execution_start","toolCallId":"fixture-call-01","toolName":"read","args":{"path":"requirements.txt"}}
+{"type":"tool_execution_end","toolCallId":"fixture-call-01","toolName":"read","result":{"content":[{"type":"text","text":"fixture requirement"}]},"isError":false}
+{"type":"message_end","message":{"role":"toolResult","toolCallId":"fixture-call-01","toolName":"read","content":[{"type":"text","text":"fixture requirement"}],"isError":false}}
