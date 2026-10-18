@@ -134,6 +134,61 @@ class AiAgentRecordedConversationTest {
 
     @Test
     @EnabledOnOs(OS.LINUX)
+    void cursorStreamingRecording_preservesThinkingToolsAndUsage(JenkinsRule jenkins)
+            throws Exception {
+        FreeStyleProject project =
+                buildProjectWithFixture(
+                        jenkins,
+                        "cursor-streaming-recording",
+                        new CursorAgentHandler(),
+                        "cursor-agent-streaming.jsonl");
+
+        FreeStyleBuild build = jenkins.buildAndAssertSuccess(project);
+        AiAgentRunAction action = build.getAction(AiAgentRunAction.class);
+        assertNotNull(action);
+        assertEquals(
+                List.of("system", "thinking", "tool_call", "tool_result", "assistant"),
+                action.getEvents().stream().map(AiAgentLogParser.EventView::getCategory).toList());
+        assertEquals("Read the fixture.", action.getEvents().get(1).getContent());
+        assertEquals("fixture content\n", action.getEvents().get(3).getToolOutput());
+        AgentUsageStats stats = action.getUsageStats();
+        assertEquals(1200, stats.getInputTokens());
+        assertEquals(900, stats.getCacheReadTokens());
+        assertEquals(40, stats.getOutputTokens());
+        assertEquals("fixture-model", stats.getDetectedModel());
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void grokProgressRecording_preservesToolsAndAggregateUsage(JenkinsRule jenkins)
+            throws Exception {
+        FreeStyleProject project =
+                buildProjectWithFixture(
+                        jenkins,
+                        "grok-progress-recording",
+                        new GrokBuildAgentHandler(),
+                        "grok-build-tool-progress.jsonl");
+
+        FreeStyleBuild build = jenkins.buildAndAssertSuccess(project);
+        AiAgentRunAction action = build.getAction(AiAgentRunAction.class);
+        assertNotNull(action);
+        assertEquals(
+                List.of("assistant", "tool_call", "tool_result", "assistant", "result"),
+                action.getEvents().stream().map(AiAgentLogParser.EventView::getCategory).toList());
+        assertEquals("Reading the fixture.", action.getEvents().get(0).getContent());
+        assertEquals("1: fixture content", action.getEvents().get(2).getToolOutput());
+        AgentUsageStats stats = action.getUsageStats();
+        assertEquals(1200, stats.getInputTokens());
+        assertEquals(1000, stats.getCacheReadTokens());
+        assertEquals(40, stats.getOutputTokens());
+        assertEquals(2240, stats.getTotalTokens());
+        assertEquals(2, stats.getNumTurns());
+        assertEquals(0.002, stats.getCostUsd(), 0.000001);
+        assertEquals("fixture-grok-model", stats.getDetectedModel());
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
     void cursorAgentRecording_producesCorrectEvents(JenkinsRule jenkins) throws Exception {
         FreeStyleProject project =
                 buildProjectWithFixture(

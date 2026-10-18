@@ -24,6 +24,9 @@ public final class GrokBuildLogFormat implements AiAgentLogFormat {
 
         String type = LogFormatUtils.normalize(json.optString("type", ""));
         String rawDetails = json.toString(2);
+        if ("available_commands".equals(type) || "usage".equals(type)) {
+            return AiAgentLogParser.ParsedLine.raw(lineNumber, "");
+        }
         if ("text".equals(type)) {
             return AiAgentLogParser.ParsedLine.message(
                     lineNumber, "assistant", "Assistant", streamingData(json), rawDetails, true);
@@ -41,6 +44,10 @@ public final class GrokBuildLogFormat implements AiAgentLogFormat {
                     lineNumber, toolName, input, rawDetails, toolCallId);
         }
         if ("tool_call_update".equals(type)) {
+            String status = LogFormatUtils.normalize(json.optString("status", ""));
+            if (!"completed".equals(status) && !"failed".equals(status)) {
+                return AiAgentLogParser.ParsedLine.raw(lineNumber, "");
+            }
             String toolCallId = LogFormatUtils.firstNonEmpty(json, "toolCallId");
             JSONObject rawOutput = json.optJSONObject("rawOutput");
             String toolName = LogFormatUtils.firstNonEmpty(rawOutput, "type", "toolName", "name");
@@ -108,6 +115,7 @@ public final class GrokBuildLogFormat implements AiAgentLogFormat {
         }
         if (value instanceof JSONArray) {
             JSONArray array = (JSONArray) value;
+            if (array.isEmpty()) return "";
             String text = LogFormatUtils.joinTextArray(array);
             if (text.isEmpty()) text = nestedContent(array);
             return text.isEmpty() ? array.toString(2) : text;
