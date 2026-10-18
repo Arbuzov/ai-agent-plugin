@@ -15,7 +15,6 @@ import hudson.util.Secret;
 
 import io.jenkins.plugins.aiagentjob.antigravity.AntigravityAgentHandler;
 import io.jenkins.plugins.aiagentjob.claudecode.ClaudeCodeAgentHandler;
-import io.jenkins.plugins.aiagentjob.geminicli.GeminiCliAgentHandler;
 import io.jenkins.plugins.aiagentjob.grokbuild.GrokBuildAgentHandler;
 import io.jenkins.plugins.aiagentjob.opencode.OpenCodeAgentHandler;
 
@@ -214,7 +213,7 @@ class AiAgentCredentialInjectionTest {
                         jenkins,
                         "missing-cred-test",
                         b -> {
-                            b.setAgent(new GeminiCliAgentHandler());
+                            b.setAgent(new ClaudeCodeAgentHandler());
                             b.setPrompt("test");
                             b.setApiCredentialsId("nonexistent-credential-id");
                             b.setCommandOverride("echo '{\"type\":\"system\"}'");
@@ -253,9 +252,6 @@ class AiAgentCredentialInjectionTest {
         project.setAgent(new ClaudeCodeAgentHandler());
         project.setApiEnvVarName("");
         assertEquals("ANTHROPIC_API_KEY", project.getEffectiveApiKeyEnvVar());
-
-        project.setAgent(new GeminiCliAgentHandler());
-        assertEquals("GEMINI_API_KEY", project.getEffectiveApiKeyEnvVar());
 
         project.setAgent(new AntigravityAgentHandler());
         assertEquals("", project.getEffectiveApiKeyEnvVar());

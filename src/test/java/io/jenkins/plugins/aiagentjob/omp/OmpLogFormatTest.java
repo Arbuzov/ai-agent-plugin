@@ -45,6 +45,27 @@ class OmpLogFormatTest {
     }
 
     @Test
+    void ompIntentMetadataDoesNotDuplicateToolCallOrHideItsResult() throws Exception {
+        Path file = temp.resolve("tool-intent-dedup.jsonl");
+        try (InputStream input =
+                getClass()
+                        .getResourceAsStream(
+                                "/io/jenkins/plugins/aiagentjob/fixtures/omp-tool-intent-dedup.jsonl")) {
+            Files.copy(input, file);
+        }
+
+        List<AiAgentLogParser.EventView> events =
+                AiAgentLogParser.parse(file.toFile(), OmpLogFormat.INSTANCE);
+        assertEquals(
+                List.of("tool_call", "tool_result"),
+                events.stream().map(AiAgentLogParser.EventView::getCategory).toList());
+        assertTrue(events.get(0).getToolInput().contains("requirements.txt"));
+        assertFalse(events.get(0).getToolInput().contains("Reading project requirements"));
+        assertTrue(events.get(0).getRawDetails().contains("Reading project requirements"));
+        assertEquals("fixture requirement", events.get(1).getToolOutput());
+    }
+
+    @Test
     void usageIncludesOmpReasoningTokensOnceAcrossSnapshots() throws Exception {
         AgentUsageStats stats =
                 AgentUsageStats.fromLogFile(fixture().toFile(), OmpStatsExtractor.INSTANCE);

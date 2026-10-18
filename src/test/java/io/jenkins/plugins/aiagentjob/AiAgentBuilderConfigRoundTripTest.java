@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import hudson.model.FreeStyleProject;
 
 import io.jenkins.plugins.aiagentjob.antigravity.AntigravityAgentHandler;
-import io.jenkins.plugins.aiagentjob.geminicli.GeminiCliAgentHandler;
+import io.jenkins.plugins.aiagentjob.claudecode.ClaudeCodeAgentHandler;
 import io.jenkins.plugins.aiagentjob.grokbuild.GrokBuildAgentHandler;
 
 import org.junit.jupiter.api.Test;
@@ -29,12 +29,12 @@ class AiAgentBuilderConfigRoundTripTest {
     void preservesConfiguredFields(JenkinsRule jenkins) throws Exception {
         FreeStyleProject project = jenkins.createFreeStyleProject("ai-config-roundtrip");
         AiAgentBuilder builder = new AiAgentBuilder();
-        builder.setAgent(new GeminiCliAgentHandler());
+        builder.setAgent(new ClaudeCodeAgentHandler());
         builder.setPrompt("Summarize this repository.");
-        builder.setModel("gemini-2.5-pro");
+        builder.setModel("claude-opus-4");
         builder.setReasoningEffort("high");
         builder.setWorkingDirectory("src");
-        builder.setExecutablePath("/opt/agents/gemini");
+        builder.setExecutablePath("/opt/agents/claude");
         builder.setYoloMode(false);
         builder.setRequireApprovals(true);
         builder.setApprovalTimeoutSeconds(42);
@@ -50,12 +50,12 @@ class AiAgentBuilderConfigRoundTripTest {
         project = jenkins.configRoundtrip(project);
 
         AiAgentBuilder reloaded = (AiAgentBuilder) project.getBuildersList().get(0);
-        assertEquals("GEMINI_CLI", reloaded.getAgent().getId());
+        assertEquals("CLAUDE_CODE", reloaded.getAgent().getId());
         assertEquals("Summarize this repository.", reloaded.getPrompt());
-        assertEquals("gemini-2.5-pro", reloaded.getModel());
+        assertEquals("claude-opus-4", reloaded.getModel());
         assertEquals("high", reloaded.getReasoningEffort());
         assertEquals("src", reloaded.getWorkingDirectory());
-        assertEquals("/opt/agents/gemini", reloaded.getExecutablePath());
+        assertEquals("/opt/agents/claude", reloaded.getExecutablePath());
         assertFalse(reloaded.isYoloMode());
         assertTrue(reloaded.isRequireApprovals());
         assertEquals(42, reloaded.getApprovalTimeoutSeconds());

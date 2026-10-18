@@ -1,9 +1,5 @@
 package io.jenkins.plugins.aiagentjob.geminicli;
 
-import hudson.Extension;
-import hudson.Util;
-import hudson.model.Descriptor;
-
 import io.jenkins.plugins.aiagentjob.AiAgentConfiguration;
 import io.jenkins.plugins.aiagentjob.AiAgentLogFormat;
 import io.jenkins.plugins.aiagentjob.AiAgentStatsExtractor;
@@ -11,13 +7,22 @@ import io.jenkins.plugins.aiagentjob.AiAgentTypeHandler;
 import io.jenkins.plugins.aiagentjob.claudecode.ClaudeCodeLogFormat;
 import io.jenkins.plugins.aiagentjob.claudecode.ClaudeCodeStatsExtractor;
 
-import org.jenkinsci.Symbol;
 import org.kohsuke.stapler.DataBoundConstructor;
 
-import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Deserialization shim for saved jobs configured with the retired Gemini CLI handler.
+ *
+ * <p>New jobs should use {@code AntigravityAgentHandler}. This class intentionally has no Jenkins
+ * descriptor or Pipeline symbol, and rejects execution so existing jobs must be migrated
+ * explicitly.
+ */
+@Deprecated
 public final class GeminiCliAgentHandler extends AiAgentTypeHandler {
+    private static final String REMOVED_MESSAGE =
+            "Gemini CLI was removed; select Antigravity CLI (agy).";
+
     @DataBoundConstructor
     public GeminiCliAgentHandler() {}
 
@@ -28,26 +33,17 @@ public final class GeminiCliAgentHandler extends AiAgentTypeHandler {
 
     @Override
     public String getDefaultApiKeyEnvVar() {
-        return "GEMINI_API_KEY";
+        return "";
+    }
+
+    @Override
+    public void validateExecution(AiAgentConfiguration config) {
+        throw new IllegalStateException(REMOVED_MESSAGE);
     }
 
     @Override
     public List<String> buildDefaultCommand(AiAgentConfiguration config, String prompt) {
-        List<String> command = new ArrayList<>();
-        command.add("gemini");
-        command.add("-p");
-        command.add(prompt);
-        command.add("--output-format");
-        command.add("stream-json");
-        if (config.isYoloMode()) {
-            command.add("--yolo");
-        }
-        String model = Util.fixEmptyAndTrim(config.getModel());
-        if (model != null) {
-            command.add("-m");
-            command.add(model);
-        }
-        return command;
+        throw new IllegalStateException(REMOVED_MESSAGE);
     }
 
     @Override
@@ -58,14 +54,5 @@ public final class GeminiCliAgentHandler extends AiAgentTypeHandler {
     @Override
     public AiAgentStatsExtractor getStatsExtractor() {
         return ClaudeCodeStatsExtractor.INSTANCE;
-    }
-
-    @Extension
-    @Symbol("geminiCli")
-    public static final class DescriptorImpl extends Descriptor<AiAgentTypeHandler> {
-        @Override
-        public String getDisplayName() {
-            return "Gemini CLI";
-        }
     }
 }

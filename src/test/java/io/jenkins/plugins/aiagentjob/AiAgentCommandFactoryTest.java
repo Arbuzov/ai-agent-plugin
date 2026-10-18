@@ -9,7 +9,6 @@ import io.jenkins.plugins.aiagentjob.antigravity.AntigravityAgentHandler;
 import io.jenkins.plugins.aiagentjob.claudecode.ClaudeCodeAgentHandler;
 import io.jenkins.plugins.aiagentjob.codex.CodexAgentHandler;
 import io.jenkins.plugins.aiagentjob.cursor.CursorAgentHandler;
-import io.jenkins.plugins.aiagentjob.geminicli.GeminiCliAgentHandler;
 import io.jenkins.plugins.aiagentjob.grokbuild.GrokBuildAgentHandler;
 import io.jenkins.plugins.aiagentjob.kiro.KiroAgentHandler;
 import io.jenkins.plugins.aiagentjob.opencode.OpenCodeAgentHandler;
@@ -35,7 +34,6 @@ class AiAgentCommandFactoryTest {
         handlers.add(new CodexAgentHandler());
         handlers.add(new CursorAgentHandler());
         handlers.add(new OpenCodeAgentHandler());
-        handlers.add(new GeminiCliAgentHandler());
         handlers.add(new AntigravityAgentHandler());
         handlers.add(new GrokBuildAgentHandler());
         handlers.add(new PiAgentHandler());
@@ -599,66 +597,6 @@ class AiAgentCommandFactoryTest {
         assertEquals(
                 List.of("xai.api_key", "cached_token"),
                 execution.getFallbackAuthenticationMethods());
-    }
-
-    // ======================== Gemini CLI Command Tests ========================
-
-    @Test
-    void geminiCli_basicCommand() {
-        AiAgentBuilder project = createProject(new GeminiCliAgentHandler());
-
-        List<String> cmd = AiAgentCommandFactory.buildDefaultCommand(project, "summarize project");
-
-        assertEquals("gemini", cmd.get(0));
-        assertTrue(cmd.contains("-p"), "Should have -p for prompt");
-        assertTrue(cmd.contains("--output-format"), "Should have --output-format");
-        assertTrue(cmd.contains("stream-json"), "Should have stream-json");
-        assertTrue(cmd.contains("summarize project"), "Should have prompt");
-    }
-
-    @Test
-    void geminiCli_yoloMode() {
-        AiAgentBuilder project = createProject(new GeminiCliAgentHandler());
-        project.setYoloMode(true);
-
-        List<String> cmd = AiAgentCommandFactory.buildDefaultCommand(project, "test");
-
-        assertTrue(cmd.contains("--yolo"), "Should have --yolo");
-    }
-
-    @Test
-    void geminiCli_manualApprovalsAreRejected() {
-        AiAgentBuilder project = createProject(new GeminiCliAgentHandler());
-        project.setRequireApprovals(true);
-
-        IllegalArgumentException error =
-                assertThrows(
-                        IllegalArgumentException.class,
-                        () -> AiAgentCommandFactory.buildDefaultCommand(project, "test"));
-
-        assertTrue(error.getMessage().contains("ACP-capable"));
-    }
-
-    @Test
-    void geminiCli_withModel() {
-        AiAgentBuilder project = createProject(new GeminiCliAgentHandler());
-        project.setModel("gemini-2.5-flash");
-
-        List<String> cmd = AiAgentCommandFactory.buildDefaultCommand(project, "test");
-
-        int modelIdx = cmd.indexOf("-m");
-        assertTrue(modelIdx >= 0, "Should have -m");
-        assertEquals("gemini-2.5-flash", cmd.get(modelIdx + 1));
-    }
-
-    @Test
-    void geminiCli_preservesReasoningLikeModelSuffix() {
-        AiAgentBuilder project = createProject(new GeminiCliAgentHandler());
-        project.setModel("gemini-model:high");
-
-        List<String> cmd = AiAgentCommandFactory.buildDefaultCommand(project, "test");
-
-        assertEquals("gemini-model:high", cmd.get(cmd.indexOf("-m") + 1));
     }
 
     // ======================== Antigravity CLI ========================

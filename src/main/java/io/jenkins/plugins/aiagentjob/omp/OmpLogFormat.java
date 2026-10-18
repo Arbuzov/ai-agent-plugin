@@ -57,6 +57,6 @@ public final class OmpLogFormat implements AiAgentLogFormat {
                             json.optString("message"),
                             json.toString(2)));
         }
-        return PiLogFormat.INSTANCE.classifyAll(lineNumber, json);
+        return PiLogFormat.INSTANCE.classifyOmpAll(lineNumber, json);
     }
 }

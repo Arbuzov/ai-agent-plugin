@@ -8,9 +8,9 @@ import net.sf.json.JSONObject;
 import java.util.Locale;
 
 /**
- * Stats extractor for Claude Code / Gemini CLI JSONL output. These agents use the shared "result"
- * event structure with cost, duration, and usage blocks, plus "assistant" message usage — all of
- * which are handled by the shared extractor in {@link AgentUsageStats}.
+ * Stats extractor for Claude Code / legacy Gemini CLI JSONL output. These logs use the shared
+ * "result" event structure with cost, duration, and usage blocks, plus "assistant" message usage —
+ * all of which are handled by the shared extractor in {@link AgentUsageStats}.
  *
  * <p>This extractor handles Claude-specific "result" events and "assistant" message usage blocks.
  */

@@ -14,9 +14,8 @@ import java.util.List;
  * Format-specific log classification for Claude Code stream-json output. Handles content arrays
  * (tool_use, tool_result, thinking, text) and stream_event deltas.
  *
- * <p>Used by both {@link ClaudeCodeAgentHandler} and {@link
- * io.jenkins.plugins.aiagentjob.geminicli.GeminiCliAgentHandler GeminiCliAgentHandler} since they
- * share the same stream-json format.
+ * <p>Used for both Claude Code and legacy Gemini CLI stream-json recordings, which share the same
+ * format.
  */
 public final class ClaudeCodeLogFormat implements AiAgentLogFormat {
 
@@ -34,6 +33,14 @@ public final class ClaudeCodeLogFormat implements AiAgentLogFormat {
     public List<AiAgentLogParser.ParsedLine> classifyAll(long lineNumber, JSONObject json) {
         String type = LogFormatUtils.firstNonEmpty(json, "type", "event", "kind", "subtype");
         String typeLower = LogFormatUtils.normalize(type);
+
+        // Claude emits thinking-token count updates as system events, but they are telemetry,
+        // not conversation content.
+        if (typeLower.equals("system")
+                && LogFormatUtils.normalize(LogFormatUtils.firstNonEmpty(json, "subtype"))
+                        .equals("thinking_tokens")) {
+            return List.of();
+        }
 
         // assistant/user message with content array
         if (typeLower.equals("assistant") || typeLower.equals("user")) {

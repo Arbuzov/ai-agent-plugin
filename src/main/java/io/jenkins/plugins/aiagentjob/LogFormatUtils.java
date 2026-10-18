@@ -88,6 +88,10 @@ public final class LogFormatUtils {
 
     public static String extractToolInput(JSONObject input, String toolName) {
         if (input == null) return "";
+        if ("apply_patch".equals(normalize(toolName))) {
+            String patch = firstNonEmpty(input, "patchText");
+            if (!patch.isEmpty()) return patch;
+        }
         String command = firstNonEmpty(input, "command");
         if (!command.isEmpty()) return command;
         String filePath = firstNonEmpty(input, "file_path", "filePath", "path");

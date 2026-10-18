@@ -5,15 +5,15 @@
 [![Jenkins Plugin](https://img.shields.io/badge/Jenkins-2.528.3+-blue.svg)](https://www.jenkins.io/)
 
 A Jenkins plugin that adds a reusable **Run AI Agent** build step for running autonomous coding
-agents (Claude Code, Codex CLI, Cursor Agent, OpenCode, Antigravity CLI, Gemini CLI, Grok Build,
-Pi, Oh My Pi, and Kiro CLI) in Jenkins jobs and pipelines.
+agents (Claude Code, Codex CLI, Cursor Agent, OpenCode, Antigravity CLI, Grok Build, Pi, Oh My Pi,
+and Kiro CLI) in Jenkins jobs and pipelines.
 
 Plugin ID (artifactId): `ai-agent`
 
 ## Features
 
 - **Reusable build step** — add `Run AI Agent` to Freestyle jobs or Pipeline via `aiAgent(...)`.
-- **Multiple agent support:** Claude Code, Codex CLI, Cursor Agent, OpenCode, Antigravity CLI, Gemini CLI,
+- **Multiple agent support:** Claude Code, Codex CLI, Cursor Agent, OpenCode, Antigravity CLI,
   Grok Build, Pi Coding Agent, Oh My Pi (OMP), and Kiro CLI.
 - **Inline conversation view** — live-streaming conversation on the build page with structured display of assistant messages, tool calls with inputs/outputs, and thinking blocks. Multiple invocations in the same build are shown as separate cards (latest expanded, older collapsible).
 - **Markdown rendering** — assistant and result messages are rendered as formatted HTML.
@@ -31,7 +31,6 @@ Plugin ID (artifactId): `ai-agent`
 | [Cursor Agent](https://www.cursor.com/) | stream-json | Tokens only |
 | [OpenCode](https://opencode.ai/docs/) | JSON | Full (tokens + cost) |
 | [Antigravity CLI](https://antigravity.google/docs/cli/overview) | stream-json | Tokens only |
-| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | stream-json | Tokens only |
 | [Grok Build](https://docs.x.ai/build/overview) | streaming-json / ACP | Full (tokens + cost) |
 | [Pi Coding Agent](https://github.com/earendil-works/pi) | JSON event stream | Full (tokens + cost) |
 | [Oh My Pi (OMP)](https://github.com/can1357/oh-my-pi) | JSON event stream | Full (tokens + cost) |
@@ -81,8 +80,8 @@ Build page showing a Cursor Agent conversation with tool calls, markdown-rendere
 ### Pipeline Syntax
 
 The step symbol is `aiAgent`, and agent handlers are referenced by their symbols such as
-`claudeCode()`, `codex()`, `cursor()`, `openCode()`, `antigravity()`, `geminiCli()`,
-`grok()`, `pi()`, `omp()`, and `kiro()`.
+`claudeCode()`, `codex()`, `cursor()`, `openCode()`, `antigravity()`, `grok()`, `pi()`, `omp()`,
+and `kiro()`.
 
 Minimal invocation (uses default Claude Code handler):
 
@@ -104,11 +103,16 @@ aiAgent(
 )
 ```
 
-### Moving from Gemini CLI to Antigravity CLI
+### Migrating saved Gemini CLI jobs to Antigravity CLI
 
 Google is [transitioning Gemini CLI users to Antigravity CLI](https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/).
-This plugin keeps `geminiCli()` available, so jobs can migrate independently without a breaking
-configuration change.
+This plugin has removed the Gemini CLI handler and the `geminiCli()` Pipeline symbol. Saved
+Freestyle jobs can still load their legacy handler so they can be edited, but builds now fail with
+an explicit migration message. Select **Antigravity CLI** (`agy`) in each affected job. Review and
+remove Gemini-specific executable paths, credentials, setup commands, and environment settings;
+Antigravity uses the Jenkins node OS account's Google authentication by default. Keep unrelated
+job setup intact. Pipeline jobs must replace `geminiCli()` with `antigravity()` and review their
+model, executable path, setup, and authentication settings manually.
 
 Install `agy` on each Jenkins node with the
 [official Antigravity installer](https://github.com/google-antigravity/antigravity-cli#installation),
@@ -270,7 +274,7 @@ and ACP mode rejects `--config`. YOLO allows OMP-specific tool, extension, and c
 
 ### Pinning a Node.js Version
 
-Some agents (Claude Code, Gemini CLI) are installed via `npx` and require Node.js on the build agent.
+Claude Code is installed via `npx` and requires Node.js on the build agent.
 To lock a specific Node.js version across builds, use the [NodeJS Plugin](https://plugins.jenkins.io/nodejs/).
 Configure a NodeJS installation in **Manage Jenkins > Tools**, then select it in the job's build environment
 so that `node` and `npx` resolve to the pinned version.
@@ -382,7 +386,7 @@ The **Reasoning effort** field is passed only to agents with verified CLI suppor
 - Antigravity CLI: `--effort <value>` (`low`, `medium`, or `high`)
 - Grok Build: `--reasoning-effort <value>` (`low`, `medium`, or `high`)
 
-Gemini CLI and Cursor Agent currently ignore the field in the built-in command template.
+Cursor Agent currently ignores the field in the built-in command template.
 
 For supported agents, the **Model** field also accepts `model:effort` shorthand. For example,
 `gpt-5.6-sol:xhigh` resolves to model `gpt-5.6-sol` and reasoning effort `xhigh`. Recognized
@@ -425,7 +429,7 @@ unsupported and fail closed. Manual-approval jobs reset inherited OMP per-tool a
 prompt rules and apply its `always-ask` policy. An inherited `deny` therefore becomes a Jenkins
 approval decision for calls gated by OMP, while provider settings remain in effect.
 
-Claude Code, Codex CLI, Cursor Agent, Antigravity CLI, Gemini CLI, Pi Coding Agent, and Kiro CLI do
+Claude Code, Codex CLI, Cursor Agent, Antigravity CLI, Pi Coding Agent, and Kiro CLI do
 not expose a supported bidirectional approval channel to this plugin. Jobs reject those combinations
 before launching instead of showing an approval that cannot affect tool execution. Command overrides
 also reject manual approval because they bypass the built-in protocol handler.
@@ -500,7 +504,7 @@ src/main/java/io/jenkins/plugins/aiagentjob/
 ├── claudecode/                     # Claude Code agent implementation
 ├── codex/                          # Codex CLI implementation (+ optional config.toml)
 ├── cursor/                         # Cursor Agent implementation
-├── geminicli/                      # Gemini CLI implementation
+├── geminicli/                      # Legacy Gemini CLI deserialization shim
 ├── grokbuild/                      # Grok Build implementation
 ├── kiro/                           # Kiro CLI implementation
 └── opencode/                       # OpenCode implementation
@@ -518,7 +522,7 @@ minimal reference:
 2. **Log format** (`ExampleLogFormat implements AiAgentLogFormat`) — classify agent-specific
    JSONL events into `ParsedLine` types. Return `null` for unrecognised lines so the shared
    parser handles them. If the agent emits stream-json compatible with Claude Code, reuse
-   `ClaudeCodeLogFormat.INSTANCE` (see `GeminiCliAgentHandler`).
+   `ClaudeCodeLogFormat.INSTANCE` for compatible stream-json formats.
 3. **Stats extractor** (`ExampleStatsExtractor implements AiAgentStatsExtractor`) — extract
    token/cost data from JSONL. Return `true` if handled, `false` for fallback.
 4. **Test fixtures** — add `.jsonl` conversation and stats fixtures under

@@ -13,7 +13,6 @@ import io.jenkins.plugins.aiagentjob.antigravity.AntigravityAgentHandler;
 import io.jenkins.plugins.aiagentjob.claudecode.ClaudeCodeAgentHandler;
 import io.jenkins.plugins.aiagentjob.codex.CodexAgentHandler;
 import io.jenkins.plugins.aiagentjob.cursor.CursorAgentHandler;
-import io.jenkins.plugins.aiagentjob.geminicli.GeminiCliAgentHandler;
 import io.jenkins.plugins.aiagentjob.grokbuild.GrokBuildAgentHandler;
 import io.jenkins.plugins.aiagentjob.opencode.OpenCodeAgentHandler;
 
@@ -215,19 +214,16 @@ class AiAgentRecordedConversationTest {
 
     @Test
     @EnabledOnOs(OS.LINUX)
-    void geminiCliRecording_producesCorrectEvents(JenkinsRule jenkins) throws Exception {
-        FreeStyleProject project =
-                buildProjectWithFixture(
-                        jenkins,
-                        "gemini-recording",
-                        new GeminiCliAgentHandler(),
-                        "gemini-cli-conversation.jsonl");
-
+    void legacyGeminiTranscriptRecording_usesSharedParser(JenkinsRule jenkins) throws Exception {
+        FreeStyleProject project = jenkins.createFreeStyleProject("gemini-recording");
         FreeStyleBuild build = jenkins.buildAndAssertSuccess(project);
-        AiAgentRunAction action = build.getAction(AiAgentRunAction.class);
-        assertNotNull(action);
+        AiAgentRunAction action = AiAgentRunAction.getOrCreate(build);
+        int invocationId = action.markStarted("Gemini CLI", "", "gemini-2.5-pro", "", false, false);
+        File fixtureFile = writeFixtureToTempFile("gemini-cli-conversation.jsonl");
+        Files.copy(fixtureFile.toPath(), action.getRawLogFile(invocationId).toPath());
+        action.markCompleted(invocationId, 0);
 
-        List<AiAgentLogParser.EventView> events = action.getEvents();
+        List<AiAgentLogParser.EventView> events = action.getEvents(invocationId);
         assertFalse(events.isEmpty(), "Should have events");
 
         List<String> cats =

@@ -129,12 +129,12 @@ public final class AntigravityLogFormat implements AiAgentLogFormat {
             toolName = LogFormatUtils.firstNonEmpty(toolInfo, "name");
         }
         String state = LogFormatUtils.normalize(update.optString("state", ""));
+        JSONObject parameters = toolInfo.optJSONObject("parameters");
+        String input = LogFormatUtils.firstNonEmpty(parameters, "CommandLine", "command_line");
+        if (input.isEmpty()) {
+            input = LogFormatUtils.extractToolInput(parameters, toolName);
+        }
         if ("active".equals(state)) {
-            JSONObject parameters = toolInfo.optJSONObject("parameters");
-            String input = LogFormatUtils.firstNonEmpty(parameters, "CommandLine", "command_line");
-            if (input.isEmpty()) {
-                input = LogFormatUtils.extractToolInput(parameters, toolName);
-            }
             return AiAgentLogParser.ParsedLine.toolCall(
                             lineNumber, toolName, input, rawDetails, stepId)
                     .withDeduplicationKey("antigravity-tool-call:" + stepId);
@@ -150,11 +150,14 @@ public final class AntigravityLogFormat implements AiAgentLogFormat {
         if (output.isEmpty() && isFailureState(state)) {
             output = "Tool " + state;
         }
+        if (output.isEmpty() && "done".equals(state)) {
+            output = "Completed";
+        }
         if (output.isEmpty()) {
             return AiAgentLogParser.ParsedLine.raw(lineNumber, "");
         }
         return AiAgentLogParser.ParsedLine.toolResult(
-                        lineNumber, toolName, output, rawDetails, stepId)
+                        lineNumber, toolName, input, output, rawDetails, stepId)
                 .withDeduplicationKey("antigravity-tool-result:" + stepId);
     }
 
