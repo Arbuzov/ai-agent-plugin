@@ -300,6 +300,95 @@ class AiAgentRawLogExportBuildTest {
         assertTrue(exported.readToString().contains("\"message\":\"exported\""));
     }
 
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void removesPreviousExportBeforeLaunchingAgent(JenkinsRule jenkins) throws Exception {
+        FreeStyleProject project =
+                newProject(
+                        jenkins,
+                        "raw-log-export-previous",
+                        b -> {
+                            b.setRawLogPath("ai-logs/run.jsonl");
+                            b.setCommandOverride(
+                                    "if [ -e ai-logs/run.jsonl ]; then"
+                                            + " echo '{\"type\":\"system\",\"previous\":\"visible\"}';"
+                                            + " else"
+                                            + " echo '{\"type\":\"system\",\"previous\":\"absent\"}';"
+                                            + " fi; "
+                                            + ASSISTANT_LINE);
+                        });
+
+        jenkins.buildAndAssertSuccess(project);
+        FreeStyleBuild second = jenkins.buildAndAssertSuccess(project);
+
+        String rawLog = controllerRawLog(second);
+        assertTrue(rawLog.contains("\"previous\":\"absent\""), rawLog);
+        assertFalse(rawLog.contains("\"previous\":\"visible\""), rawLog);
+        jenkins.assertLogContains("Removed existing file at raw log path", second);
+        assertEquals(rawLog, workspaceFile(second, "ai-logs/run.jsonl").readToString());
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void replacesFifoPlantedAtTargetPath(JenkinsRule jenkins) throws Exception {
+        FreeStyleProject project =
+                newProject(
+                        jenkins,
+                        "raw-log-export-fifo",
+                        b -> {
+                            b.setRawLogPath("ai-logs/run.jsonl");
+                            b.setCommandOverride(
+                                    "mkdir -p ai-logs; mkfifo ai-logs/run.jsonl; "
+                                            + ASSISTANT_LINE);
+                        });
+
+        QueueTaskFuture<FreeStyleBuild> future = project.scheduleBuild2(0);
+        assertNotNull(future);
+        FreeStyleBuild build = future.get(60, TimeUnit.SECONDS);
+
+        jenkins.assertBuildStatusSuccess(build);
+        FilePath exported = workspaceFile(build, "ai-logs/run.jsonl");
+        assertEquals(controllerRawLog(build), exported.readToString());
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void normalizesBackslashAndDotSegmentsInPath(JenkinsRule jenkins) throws Exception {
+        FreeStyleProject project =
+                newProject(
+                        jenkins,
+                        "raw-log-export-normalize",
+                        b -> {
+                            b.setRawLogPath(".\\ai-logs\\win.jsonl");
+                            b.setCommandOverride(ASSISTANT_LINE);
+                        });
+
+        FreeStyleBuild build = jenkins.buildAndAssertSuccess(project);
+
+        FilePath exported = workspaceFile(build, "ai-logs/win.jsonl");
+        assertTrue(exported.exists(), "Backslashes should act as directory separators");
+        assertEquals(controllerRawLog(build), exported.readToString());
+        jenkins.assertLogContains(
+                "Raw agent log saved to workspace path: ai-logs/win.jsonl", build);
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void acceptsDotPrefixedRootLevelPath(JenkinsRule jenkins) throws Exception {
+        FreeStyleProject project =
+                newProject(
+                        jenkins,
+                        "raw-log-export-dot-root",
+                        b -> {
+                            b.setRawLogPath("./run.jsonl");
+                            b.setCommandOverride(ASSISTANT_LINE);
+                        });
+
+        FreeStyleBuild build = jenkins.buildAndAssertSuccess(project);
+
+        assertEquals(controllerRawLog(build), workspaceFile(build, "run.jsonl").readToString());
+    }
+
     private static void waitForRawLogLine(FreeStyleBuild build, String expected) throws Exception {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
         while (System.nanoTime() < deadline) {

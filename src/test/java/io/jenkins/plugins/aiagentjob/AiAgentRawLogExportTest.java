@@ -31,6 +31,16 @@ class AiAgentRawLogExportTest {
     }
 
     @Test
+    void resolveNormalizesSeparatorsAndDotSegments() throws Exception {
+        assertEquals("ai-logs/review.jsonl", AiAgentRawLogExport.resolve("ai-logs\\review.jsonl"));
+        assertEquals("run.jsonl", AiAgentRawLogExport.resolve("./run.jsonl"));
+        assertEquals("run.jsonl", AiAgentRawLogExport.resolve(".\\run.jsonl"));
+        assertEquals(
+                "ai-logs/sub/review.jsonl",
+                AiAgentRawLogExport.resolve("./ai-logs//./sub\\review.jsonl"));
+    }
+
+    @Test
     void rejectsAbsolutePaths() {
         assertError("/var/log/agent.jsonl", "relative to the workspace");
         assertError("\\\\server\\share\\agent.jsonl", "relative to the workspace");

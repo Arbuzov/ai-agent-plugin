@@ -461,15 +461,19 @@ archiveArtifacts artifacts: 'ai-logs/*.jsonl'
 - The file has the same lines as the build-page raw log: agent stdout and stderr, one entry per
   line. The injected API key credential is masked; other secrets the agent prints are not.
 - The path is resolved against the workspace root, not **Working directory**. Environment variables
-  are expanded. An existing file is overwritten, so give each invocation its own path.
-- The copy is made after the agent exits, including after a non-zero exit, a timeout, or an abort.
-  The agent cannot read or change the exported file while it runs.
+  are expanded, and `/` and `\` both separate directories. An existing file at the path is replaced,
+  so give each invocation its own path.
+- Any existing file at the path is removed before the agent starts, and the copy is made after the
+  agent exits, including after a non-zero exit, a timeout, or an abort. The agent cannot read a
+  previous export at that path, or read or change the new one while it runs. Exports at other paths
+  stay in a reused workspace and are visible to later agents; clean them up after archiving.
 - If the copy fails, the build fails, even when the agent exited with a non-zero code. If the step
   already failed with an error, such as an abort or a launch failure, the copy failure is logged and
   attached to that error instead.
 - Absolute paths and `..` segments are rejected before the agent starts. A parent directory that
-  resolves outside the workspace through a symlink is rejected at copy time, and a symlink at the
-  target path is replaced with a regular file.
+  resolves outside the workspace through a symlink is rejected. A symlink, FIFO, or file at the
+  target path is removed and the log is written to a newly created file, so the target is never
+  followed.
 
 ## Building
 

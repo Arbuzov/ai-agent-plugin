@@ -90,6 +90,9 @@ final class AiAgentExecutor {
 
         FilePath runDirectory = resolveRunDirectory(workspace, workDirValue);
         runDirectory.mkdirs();
+        if (rawLogPath != null) {
+            AiAgentRawLogExport.clearBeforeLaunch(workspace, rawLogPath, listener);
+        }
 
         EnvVars procEnv = new EnvVars(env);
         procEnv.putAll(
@@ -341,6 +344,10 @@ final class AiAgentExecutor {
                             throwExportFailure(exportFailure);
                         } else {
                             executionFailure.addSuppressed(exportFailure);
+                            if (exportFailure instanceof InterruptedException) {
+                                // Keep an abort that arrived during the copy visible to Jenkins.
+                                wasInterrupted = true;
+                            }
                         }
                     }
                 } finally {
