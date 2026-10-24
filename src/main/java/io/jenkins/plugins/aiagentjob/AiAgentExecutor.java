@@ -62,6 +62,9 @@ final class AiAgentExecutor {
         String expandedReasoningEffort =
                 Util.replaceMacro(Util.fixNull(config.getReasoningEffort()), env);
         String workDirValue = Util.replaceMacro(Util.fixNull(config.getWorkingDirectory()), env);
+        String rawLogPath =
+                AiAgentRawLogExport.resolve(
+                        Util.replaceMacro(Util.fixNull(config.getRawLogPath()), env));
         String executablePath =
                 Util.replaceMacro(Util.fixNull(config.getExecutablePath()), env).trim();
         String commandOverride = Util.fixNull(config.getCommandOverride()).trim();
@@ -310,13 +313,40 @@ final class AiAgentExecutor {
                 executionFailure = e;
                 throw e;
             } finally {
+                // Export and metadata persistence must also run after an abort or timeout, so
+                // clear a pending interrupt for the duration and restore it afterwards.
+                boolean wasInterrupted = Thread.interrupted();
                 try {
-                    action.markCompleted(invocationId, exitCode);
-                } catch (IOException completionFailure) {
-                    if (executionFailure == null) {
-                        throw completionFailure;
+                    Exception exportFailure =
+                            rawLogPath == null
+                                    ? null
+                                    : exportRawLog(
+                                            action.getRawLogFile(invocationId),
+                                            workspace,
+                                            rawLogPath,
+                                            listener);
+                    try {
+                        action.markCompleted(invocationId, exitCode);
+                    } catch (IOException completionFailure) {
+                        if (executionFailure == null) {
+                            if (exportFailure != null) {
+                                completionFailure.addSuppressed(exportFailure);
+                            }
+                            throw completionFailure;
+                        }
+                        executionFailure.addSuppressed(completionFailure);
                     }
-                    executionFailure.addSuppressed(completionFailure);
+                    if (exportFailure != null) {
+                        if (executionFailure == null) {
+                            throwExportFailure(exportFailure);
+                        } else {
+                            executionFailure.addSuppressed(exportFailure);
+                        }
+                    }
+                } finally {
+                    if (wasInterrupted) {
+                        Thread.currentThread().interrupt();
+                    }
                 }
             }
         } finally {
@@ -335,6 +365,29 @@ final class AiAgentExecutor {
                 executionCustomization.cleanup(listener);
             }
         }
+    }
+
+    private static Exception exportRawLog(
+            File rawLogFile, FilePath workspace, String rawLogPath, TaskListener listener) {
+        try {
+            AiAgentRawLogExport.export(rawLogFile, workspace, rawLogPath, listener);
+            return null;
+        } catch (IOException | InterruptedException | RuntimeException e) {
+            listener.getLogger()
+                    .println("[ai-agent] Failed to save raw agent log to workspace: " + e);
+            return e;
+        }
+    }
+
+    private static void throwExportFailure(Exception failure)
+            throws IOException, InterruptedException {
+        if (failure instanceof IOException ioFailure) {
+            throw ioFailure;
+        }
+        if (failure instanceof InterruptedException interruptedFailure) {
+            throw interruptedFailure;
+        }
+        throw (RuntimeException) failure;
     }
 
     private static int executeAcpProcess(
@@ -749,6 +802,11 @@ final class AiAgentExecutor {
         @Override
         public boolean isDisableInteractive() {
             return delegate.isDisableInteractive();
+        }
+
+        @Override
+        public String getRawLogPath() {
+            return delegate.getRawLogPath();
         }
     }
 

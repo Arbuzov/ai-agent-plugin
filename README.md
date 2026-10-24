@@ -74,6 +74,7 @@ Build page showing a Cursor Agent conversation with tool calls, markdown-rendere
    - **Environment variables** — inject additional env vars (`KEY=VALUE`, one per line).
    - **Command override** — replace the default command template entirely.
    - **Extra CLI args** — append flags to the generated command.
+   - **Save raw log to workspace path** — optional workspace-relative file that receives a copy of the raw agent log after the agent exits.
 3. Optionally add SCM, build triggers, post-build steps, and publishers as with any Jenkins job.
 4. Build the job. The conversation streams live on the build page.
 
@@ -440,6 +441,35 @@ After a build completes, a statistics bar shows token usage, cost (when availabl
 Data is extracted from the agent's own reporting in the JSONL log. The level of detail depends on
 the agent: Claude Code, OpenCode, Grok Build, Pi Coding Agent, and Oh My Pi report full cost, while
 others report token counts.
+
+### Saving the Raw Log to the Workspace
+
+The raw agent log is always stored with the build on the controller. To collect agent runs in an
+external system, set **Save raw log to workspace path** (`rawLogPath`) to a file path relative to
+the workspace root. After the agent process exits, the plugin copies the raw log to that path on the
+build node, where later steps can archive or upload it.
+
+```groovy
+aiAgent(
+  agent: claudeCode(),
+  prompt: 'Review the merge request diff in ci/context.md',
+  rawLogPath: "ai-logs/${env.BUILD_NUMBER}-review.jsonl"
+)
+archiveArtifacts artifacts: 'ai-logs/*.jsonl'
+```
+
+- The file has the same lines as the build-page raw log: agent stdout and stderr, one entry per
+  line. The injected API key credential is masked; other secrets the agent prints are not.
+- The path is resolved against the workspace root, not **Working directory**. Environment variables
+  are expanded. An existing file is overwritten, so give each invocation its own path.
+- The copy is made after the agent exits, including after a non-zero exit, a timeout, or an abort.
+  The agent cannot read or change the exported file while it runs.
+- If the copy fails, the build fails, even when the agent exited with a non-zero code. If the step
+  already failed with an error, such as an abort or a launch failure, the copy failure is logged and
+  attached to that error instead.
+- Absolute paths and `..` segments are rejected before the agent starts. A parent directory that
+  resolves outside the workspace through a symlink is rejected at copy time, and a symlink at the
+  target path is replaced with a regular file.
 
 ## Building
 
