@@ -49,6 +49,15 @@ class AiAgentRawLogExportTest {
     }
 
     @Test
+    void rejectsDriveRelativePathsHiddenBehindDotSegments() {
+        assertError("./D:outside.jsonl", "relative to the workspace");
+        assertError(".\\D:outside.jsonl", "relative to the workspace");
+        assertError(".//./D:\\logs\\outside.jsonl", "relative to the workspace");
+        assertThrows(AbortException.class, () -> AiAgentRawLogExport.resolve("./D:outside.jsonl"));
+        assertThrows(AbortException.class, () -> AiAgentRawLogExport.resolve(".\\D:outside.jsonl"));
+    }
+
+    @Test
     void rejectsParentTraversal() {
         assertError("../agent.jsonl", "cannot contain '..'");
         assertError("ai-logs/../../agent.jsonl", "cannot contain '..'");

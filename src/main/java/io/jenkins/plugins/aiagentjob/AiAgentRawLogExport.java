@@ -47,9 +47,11 @@ final class AiAgentRawLogExport {
         if (trimmed.isEmpty()) {
             return null;
         }
+        // The drive check runs on the normalized form: "./D:x" normalizes to "D:x", which Windows
+        // resolves against the current directory of drive D:, outside the workspace.
         if (trimmed.startsWith("/")
                 || trimmed.startsWith("\\")
-                || WINDOWS_DRIVE.matcher(trimmed).matches()) {
+                || WINDOWS_DRIVE.matcher(normalize(trimmed)).matches()) {
             return "Raw log path must be relative to the workspace: " + trimmed;
         }
         if (trimmed.endsWith("/") || trimmed.endsWith("\\")) {
@@ -82,11 +84,12 @@ final class AiAgentRawLogExport {
             throw new AbortException("[ai-agent] " + error);
         }
         String trimmed = Util.fixEmptyAndTrim(path);
-        if (trimmed == null) {
-            return null;
-        }
+        return trimmed == null ? null : normalize(trimmed);
+    }
+
+    private static String normalize(String path) {
         List<String> kept = new ArrayList<>();
-        for (String segment : SEPARATORS.split(trimmed)) {
+        for (String segment : SEPARATORS.split(path)) {
             if (!segment.isEmpty() && !".".equals(segment)) {
                 kept.add(segment);
             }
